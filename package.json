@@ -1,0 +1,18 @@
+{
+  "name": "agentified-sidequest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Campus activity planner composed from independent agentified websites.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "test": "node --test tests/sidequest.test.mjs",
+    "serve": "node scripts/serve-all.mjs",
+    "e2e": "node tests/e2e/run-sidequest-e2e.mjs"
+  }
+}
