@@ -25,6 +25,13 @@
 //   S9  Every model request went to the visitor's router with the key and model; the
 //       partner agent was offered only its own site's tools.
 //   S10 No CSP violations and no page errors along the whole path.
+//   S11 First visit: an invitation to customize shows, takes no focus and stores nothing;
+//       Not now keeps it away. (Runs right after S1.)
+//   S12 Setup: six steps save as they are answered and contact no one; the planner then opens
+//       with the answers and its suggestions start with the interests.
+//   S13 Profile: the quest from S6 and a saved plan are there, changes are kept, a saved plan
+//       starts on the hub without reading anything, and the page cannot send a request.
+//   S14 Erase: everything is gone, the AI key too, after the page asks.
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -138,6 +145,18 @@ async function main() {
     check("S1", groupRequests() === 0 && !hubFirst.some((p) => p.startsWith("/runtime/index.js") || p.startsWith("/site.js"))
       && cors.headers.get("access-control-allow-origin") === "*" && corsNetwork.headers.get("access-control-allow-origin") === "*",
       `group requests on load: ${groupRequests()}; runtime loaded on load: ${hubFirst.some((p) => p.startsWith("/runtime/index.js"))}; manifest CORS: ${cors.headers.get("access-control-allow-origin")}; network CORS: ${corsNetwork.headers.get("access-control-allow-origin")}`);
+
+    // S11: the first-time invitation.
+    await waitFor(client, session, `!!document.querySelector(".invite.is-on")`, "the first-time invitation");
+    const invitation = await client.evaluate(session, `JSON.stringify({ text: document.querySelector(".invite").innerText, focus: document.activeElement === document.body, stored: localStorage.length, dialogs: document.querySelectorAll("dialog[open]").length })`).then(JSON.parse);
+    await client.evaluate(session, `[...document.querySelectorAll(".invite button")].find((b) => b.textContent === "Not now").click(), "closed"`);
+    await waitFor(client, session, `!document.querySelector(".invite")`, "the invitation to close");
+    await client.send("Page.navigate", { url: HUB }, session);
+    await waitFor(client, session, `document.readyState === "complete" && !!window.Sidequest`, "the hub page again");
+    await sleep(3600);
+    const invitedAgain = await client.evaluate(session, `!!document.querySelector(".invite")`);
+    check("S11", /customize your experience/i.test(invitation.text) && invitation.focus && invitation.stored === 0 && invitation.dialogs === 0 && !invitedAgain && groupRequests() === 0,
+      `took focus: ${!invitation.focus}; items stored by looking: ${invitation.stored}; shown again after "Not now": ${invitedAgain}; group requests: ${groupRequests()}`);
 
     // S2: off-topic.
     await say("What's the weather like today?");
@@ -265,6 +284,86 @@ async function main() {
     const csp = await client.evaluate(session, `window.__csp`);
     const errors = await client.evaluate(session, `window.__errors`);
     check("S10", csp.length === 0 && errors.length === 0, `CSP violations: ${csp.length ? csp.join(" || ") : "none"}; page errors: ${errors.length ? errors.join(" || ") : "none"}`);
+
+    // S12: the first-time setup, then the hub it tunes.
+    const run = (expression) => client.evaluate(session, expression);
+    const trouble = async () => [...await run("window.__csp"), ...await run("window.__errors")];
+    const go = async (page, ready) => {
+      await client.send("Page.navigate", { url: "about:blank" }, session);
+      await client.send("Page.navigate", { url: new URL(page, HUB).href }, session);
+      await waitFor(client, session, `document.readyState === "complete" && !!document.querySelector(${JSON.stringify(ready)})`, page);
+      await sleep(400);
+    };
+    const groupsBeforeSetup = groupRequests();
+    await go("welcome.html#start", "#wl-gaps td button");
+    const next = async () => { await run(`document.querySelector("#wl-next").click(), "next"`); await sleep(120); };
+    const press = (selector, text) => run(`[...document.querySelectorAll(${JSON.stringify(selector)})].find((n) => n.textContent.includes(${JSON.stringify(text)})).click(), "pressed"`);
+    await run(`{ const i = document.querySelector("#wl-name"); i.value = "Robin"; i.dispatchEvent(new Event("input", { bubbles: true })); "typed"; }`);
+    await press("#wl-face label", "Grad cap");
+    await next();
+    await press("#wl-mood label", "Get moving");
+    await next();
+    await press("#wl-interests button", "Walks");
+    await press("#wl-interests button", "Photos");
+    await next();
+    await press("#wl-limits label", "30 min");
+    await press("#wl-limits label", "Up to $5");
+    await sleep(1500);
+    await shot(client, session, path.join(shots, "sidequest-03-setup.png"), "#main");
+    await next();
+    await press("#wl-gaps .yc-presets button", "Lunch");
+    await next();
+    await press("#wl-look label", "Lagoon");
+    await next();
+    await waitFor(client, session, `document.querySelector("#wl-title-7").innerText.includes("Robin")`, "the end of the setup");
+    const stored = JSON.parse(await run(`localStorage.getItem("campus-sidequest-you-v1")`));
+    const setupTrouble = await trouble();
+    await go("./", "#planner-hello p");
+    const tuned = JSON.parse(await run(`JSON.stringify({ choices: Sidequest.currentChoices(), suggestions: [...document.querySelectorAll("[data-suggest]")].slice(0, 2).map((n) => n.dataset.suggest), hello: document.querySelector("#planner-hello").innerText, accent: document.documentElement.dataset.accent, invited: !!document.querySelector(".invite") })`));
+    // During the lunch hour on a weekday the planner opens with the gap's own time.
+    const times = [30, 60];
+    check("S12", stored.setup === "done" && stored.face.hat === "grad" && stored.gaps.slice(0, 5).every((hours) => hours.join() === "12") && tuned.choices.mood === "move" && times.includes(tuned.choices.timeMinutes) && tuned.choices.budget === 5
+      && tuned.suggestions.join() === "walk,photo" && tuned.hello.includes("Hey Robin.") && tuned.accent === "lagoon" && !tuned.invited && setupTrouble.length === 0 && groupRequests() === groupsBeforeSetup,
+      `planner: ${JSON.stringify(tuned.choices)}; suggestions: ${tuned.suggestions.join(", ")}; says: ${tuned.hello.replace(/\s+/g, " ").slice(0, 80)}; group requests during setup: ${groupRequests() - groupsBeforeSetup}; CSP violations or errors: ${setupTrouble.join(" || ") || "none"}`);
+
+    // S13: the profile page.
+    await run(`document.querySelector("#build-quest").click(), "clicked"`);
+    await waitFor(client, session, `document.querySelector("#contact-dialog").open`, "the consent dialog");
+    await answerDialog("allow");
+    await planDone();
+    const firstPlan = await run(`[...document.querySelector(".plan-card").querySelectorAll(".plan-stops strong")].map((s) => s.textContent).join(" → ")`);
+    const picked = await run(`document.querySelector(".plan-match")?.textContent || ""`);
+    await run(`document.querySelector(".save-quest-button").click(), "saved"`);
+    await go("profile.html", ".quest-row");
+    await run(`document.querySelector(".quest-feels button").click(); { const n = document.querySelector(".quest-note"); n.value = "Would do again"; n.dispatchEvent(new Event("change")); } document.querySelector("#me-edit").click(); document.querySelector("#me-form-tagline").value = "<b>Walks first</b>"; document.querySelector("#me-form").requestSubmit(); "edited"`);
+    await sleep(1800);
+    const profile = JSON.parse(await run(`JSON.stringify({ name: document.querySelector("#me-name").innerText.replace(/\\s+/g, ""), level: document.querySelector("#me-level").textContent, log: document.querySelector("#panel-log h3").textContent, saved: document.querySelector("#panel-saved h3").textContent, badges: [...document.querySelectorAll(".me-badges .is-earned strong")].map((n) => n.textContent), tagline: document.querySelector("#me-tagline").textContent, markup: document.querySelector("#me-tagline").children.length })`));
+    const entry = JSON.parse(await run(`localStorage.getItem("campus-sidequest-progress-v1")`)).log[0];
+    const profileTrouble = await trouble();
+    await run(`document.querySelector("#me-edit").click(); document.querySelector("#me-form-tagline").value = "Walks first, coffee second."; document.querySelector("#me-form").requestSubmit(); "edited"`);
+    // Headings rise as they are scrolled to, and the "saved" message fades: let both finish.
+    for (let y = 0; y < 5200; y += 400) { await run(`scrollTo({ top: ${y}, behavior: "instant" }), 1`); await sleep(90); }
+    await run(`scrollTo({ top: 0, behavior: "instant" }), 1`);
+    await sleep(2200);
+    await shot(client, session, path.join(shots, "sidequest-04-profile.png"), "#main");
+    const sent = await run(`await fetch("agent-manifest.json").then(() => "sent", () => "blocked")`);
+    const groupsBeforeStart = groupRequests();
+    await run(`document.querySelector("#tab-saved").click(); document.querySelector("#panel-saved .btn").click(); "started"`);
+    await waitFor(client, session, `location.pathname === "/" && !!document.querySelector(".active-quest")`, "the saved plan on the hub");
+    check("S13", profile.name === "Robin" && profile.level.includes("First Steps") && profile.log.includes("→") && profile.saved === firstPlan && profile.badges.includes("First Steps") && profile.tagline === "<b>Walks first</b>" && profile.markup === 0
+      && entry.feel === "love" && entry.note === "Would do again" && profileTrouble.length === 0 && sent === "blocked" && groupRequests() === groupsBeforeStart,
+      `${profile.name}, ${profile.level}; finished: ${profile.log}; saved: ${profile.saved}; ${picked || "no match line"}; badges: ${profile.badges.join(", ")}; feeling and note kept: ${entry.feel}, ${entry.note}; a request from the page: ${sent}; group requests to start a saved plan: ${groupRequests() - groupsBeforeStart}; CSP violations or errors: ${profileTrouble.join(" || ") || "none"}`);
+
+    // S14: erase everything. The key from S7 is still saved.
+    await go("profile.html#privacy", "#data-erase");
+    const keyBefore = await run(`(JSON.stringify(localStorage) + document.cookie).includes(${JSON.stringify(KEY)})`);
+    await run(`document.querySelector("#data-erase").click(), "asked"`);
+    const asked = await run(`document.querySelector("#ask").open && document.querySelector("#ask").innerText`);
+    await run(`document.querySelector("#ask-yes").click(), "erased"`);
+    await sleep(500);
+    const left = await run(`JSON.stringify({ ours: Object.keys(localStorage).filter((k) => k.startsWith("campus-sidequest")), key: (JSON.stringify(localStorage) + JSON.stringify(sessionStorage) + decodeURIComponent(document.cookie)).includes(${JSON.stringify(KEY)}), accent: document.documentElement.dataset.accent })`).then(JSON.parse);
+    check("S14", keyBefore && /AI provider key/.test(asked) && left.ours.length === 0 && !left.key && left.accent === "sunset",
+      `asked first: ${Boolean(asked)}; items left: ${left.ours.join(", ") || "none"}; AI key before and after: ${keyBefore}, ${left.key}`);
   } catch (error) {
     check("RUN", false, error.stack || String(error));
   } finally {

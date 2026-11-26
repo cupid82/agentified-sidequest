@@ -1,0 +1,55 @@
+{
+  "ranAt": "2026-11-25T14:02:37.886Z",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "detail": "group requests on load: 0; runtime loaded on load: false; manifest CORS: *; network CORS: *"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "detail": "dialog opened: false; group requests: 0; reply: I couldn’t match that to the campus groups’ activities. I plan short campus breaks from tw"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "detail": "planner: {\"mood\":\"make\",\"activityRequest\":\"zine\",\"timeMinutes\":30,\"budget\":0}; dialog names both origins: true; group requests while open: 0, after Not now: 0"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "detail": "plans: Free/45 min · 2 stops: Fold a tiny zine + Co-op puzzle sprint | $2/40 min · 2 stops: Design a button badge + Photo scavenger sprint | $4/40 min · 2 stops: Sketch and swap + Puzzle and snack break; within 60 min and $5: true; repeated stops: 0; both bridges loaded: true,true; group requests that were not a plain GET or carried a key or cookie: 0"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "detail": "asked again after \"don't ask\": false; \"Ask me each time\" shown: true; asked after it: true"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "detail": "saved progress: {\"completed\":1,\"badges\":[\"First Steps\"]}; recap: Quest complete! You earned the First Steps badge. Fold a tiny zine → Co-op puzzle sprint ·"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "detail": "runtime loaded before the switch: false; status before/after key: needs-key/ready; planner set by the agent: {\"mood\":\"make\",\"activityRequest\":\"zine\",\"timeMinutes\":30,\"budget\":0}; group requests while the page asked: 0; agent said: SIDEQUEST_PLAN: ok=true; options=1; top=Fold a tiny zine (Makers Studio)"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "detail": "card names the group: true; network fetched before Allow: 0; fetched after: /agent-manifest.json, /maker_studio.network.json, /bridge/action-bridge.html, /runtime/action-bridge.js, /bridge/agent-manifest.json, /bridge/bridge-actions.js, /bridge/action-bridge.html, /runtime/action-bridge.js, /bridge/agent-manifest.json, /bridge/bridge-actions.js; agent said: SIDEQUEST_PARTNER: MAKER_FRONT: 8 activities, first Fold a tiny zine; asked \"Summarize your public demo activity list wi; partner was asked: \"Summarize your public demo activity list with names, times and costs. Summarize your publi\""
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "detail": "model requests: 7 (sidequest, maker_front); without the key: 0; other model: 0; hub agent tools: maker_studio, campus_games, website_get_sidequest_status, website_set_sidequest_choices, website_build_sidequest, render_cruse; Makers Studio agent tools: website_get_activities, render_cruse"
+    },
+    {
+      "id": "S10",
+      "ok": true,
+      "detail": "CSP violations: none; page errors: none"
+    }
+  ]
+}

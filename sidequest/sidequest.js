@@ -6,14 +6,14 @@
 // visitor switches the chat to it (site.js), and it drives the same planner through the
 // actions in site-actions.js.
 import { ActionBridgeClient, sameOriginAsset } from "./runtime/action-transport.js";
-import { MOODS, TIME_OPTIONS, BUDGET_OPTIONS, parseMessage, findPlans } from "./planner.js";
+import { MOODS, TIME_OPTIONS, BUDGET_OPTIONS, parseMessage, findPlans, interestsIn } from "./planner.js";
+import { finishQuest, isSaved, readProgress, readYou, tasteOf, toggleSaved } from "./you.js";
 
 // scripts/retarget-sidequest.mjs rewrites these two base URLs for hosting.
 const PEERS = [
   { id: "maker", name: "Makers Studio", base: "http://localhost:8081", network: "maker_studio", color: "maker" },
   { id: "games", name: "Campus Games", base: "http://[::1]:8083", network: "campus_games", color: "games" },
 ];
-const PROGRESS_KEY = "campus-sidequest-progress-v1";
 const CONSENT_KEY = "campus-sidequest-read-consent";
 const MODE_KEY = "campus-sidequest-chat-mode";
 const $ = (selector) => document.querySelector(selector);
@@ -29,15 +29,11 @@ const storage = {
 
 // ---- Progress ---------------------------------------------------------------------------
 
-function readProgress() {
-  try { return JSON.parse(storage.get("localStorage", PROGRESS_KEY) || '{"completed":0,"badges":[]}'); }
-  catch { return { completed: 0, badges: [] }; }
-}
 function renderProgress() {
-  const progress = readProgress();
-  $("#quests-completed").textContent = String(progress.completed || 0);
-  const badges = progress.badges || [];
-  $("#quest-badges").textContent = badges.length ? `Badges earned: ${badges.join(" · ")}` : "Finish your first quest to earn the First Steps badge.";
+  const { completed, badges } = readProgress();
+  const latest = badges.slice(-4).join(" · "), more = badges.length - 4;
+  $("#quests-completed").textContent = String(completed);
+  $("#quest-badges").textContent = badges.length ? `Badges earned: ${latest}${more > 0 ? ` and ${more} more` : ""}` : "Finish your first quest to earn the First Steps badge.";
 }
 
 // ---- Planner choices ----------------------------------------------------------------------
@@ -77,8 +73,17 @@ function setChoices(patch = {}) {
   return { ok: true, choices: currentChoices() };
 }
 
+// What the planner opens with, and goes back to on "start over". personal.js sets the
+// visitor's own from their profile.
+let defaults = { mood: "meet", timeMinutes: 60, budget: 0, activityRequest: "" };
+
+function useDefaults(patch) {
+  defaults = { ...defaults, ...patch };
+  return setChoices(defaults);
+}
+
 function resetChoices() {
-  setChoices({ mood: "meet", timeMinutes: 60, budget: 0, activityRequest: "" });
+  setChoices(defaults);
   hasChatActivity = false;
 }
 
@@ -228,7 +233,8 @@ async function runBuild() {
     }));
 
     setAgentStep("match", "working", "Matching your choices…");
-    const plans = findPlans(lists, choices);
+    // The visitor's saved taste breaks ties. It is used here only, and never sent anywhere.
+    const plans = findPlans(lists, choices, tasteOf(readYou(), readProgress()));
     if (!plans.length) {
       setAgentStep("match", "error", "Nothing fits those limits");
       throw new Error(choices.activityRequest
@@ -279,7 +285,7 @@ function renderPlans(plans, choices) {
   heading.append(copy);
   root.append(heading);
 
-  const grid = el("div", "plan-grid");
+  const grid = el("div", "plan-grid"), { interests } = readYou().plan;
   plans.forEach((plan) => {
     const card = el("article", "plan-card");
     const head = el("div", "plan-card-head");
@@ -293,12 +299,30 @@ function renderPlans(plans, choices) {
     const choose = el("button", "choose-quest-button", "Choose this quest →");
     choose.type = "button";
     choose.addEventListener("click", () => startQuest(plan, choices));
-    card.append(head, el("p", "plan-time", `${plan.minutes} min · ${plan.stops.length === 1 ? "1 activity" : `${plan.stops.length} stops`}`), list, choose);
+    const meta = el("div", "plan-meta");
+    meta.append(el("p", "plan-time", `${plan.minutes} min · ${plan.stops.length === 1 ? "1 activity" : `${plan.stops.length} stops`}`), saveButton(plan, choices));
+    card.append(head, meta, list);
+    const likes = [...new Set(plan.stops.flatMap(({ item }) => interestsIn(item, interests).map((interest) => interest.label.toLowerCase())))];
+    if (likes.length) card.append(el("p", "plan-match", `Picked for you: ${likes.join(", ")}`));
+    card.append(choose);
     grid.append(card);
   });
   root.append(grid);
   const why = choices.activityRequest ? "Ranked by how closely each listing matches your request" : `Matched to your ${MOODS[choices.mood]?.adjective || ""} vibe`;
   root.append(el("p", "quest-why", `${why}, from both groups’ public sample lists. Each group lists its own access and hours.`));
+}
+
+/** Keeps a plan on the profile page, to start another day. */
+function saveButton(plan, choices) {
+  const save = el("button", "save-quest-button");
+  save.type = "button";
+  const show = (saved) => {
+    save.textContent = saved ? "Saved ✓" : "Save";
+    save.setAttribute("aria-pressed", String(saved));
+  };
+  save.addEventListener("click", () => show(toggleSaved(plan, choices)));
+  show(isSaved(plan));
+  return save;
 }
 
 const WILDCARDS = {
@@ -311,6 +335,7 @@ function startQuest(plan, choices) {
   const root = $("#quest-result");
   root.querySelector(".active-quest")?.remove();
   const checked = new Set();
+  let finished = false;
   const quest = el("section", "active-quest");
   quest.setAttribute("aria-label", "Active Sidequest");
   const head = el("div", "active-quest-head");
@@ -347,7 +372,7 @@ function startQuest(plan, choices) {
     route.append(row);
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) checked.add(index); else checked.delete(index);
-      finish.disabled = checked.size !== plan.stops.length;
+      finish.disabled = finished || checked.size !== plan.stops.length;
     });
   });
   quest.append(route);
@@ -368,21 +393,33 @@ function startQuest(plan, choices) {
   const recap = el("p", "quest-recap");
   recap.hidden = true;
   finish.addEventListener("click", () => {
-    const progress = readProgress();
-    progress.completed = (progress.completed || 0) + 1;
-    progress.badges ||= [];
-    const earned = { 1: "First Steps", 3: "Campus Regular", 5: "Quest Collector" }[progress.completed] || null;
-    if (earned && !progress.badges.includes(earned)) progress.badges.push(earned);
-    storage.set("localStorage", PROGRESS_KEY, JSON.stringify(progress));
+    if (finished) return;
+    finished = true;
+    const earned = finishQuest(plan, choices);
     renderProgress();
     recap.hidden = false;
-    recap.textContent = `Quest complete! ${earned ? `You earned the ${earned} badge. ` : ""}${routeText(plan)} · ${plan.minutes} min · ${formatCost(plan.cost)}.`;
+    const badges = earned.length ? `You earned the ${new Intl.ListFormat("en-GB").format(earned)} badge${earned.length === 1 ? "" : "s"}. ` : "";
+    const profile = el("a", "", "See it on your profile →");
+    profile.href = "profile.html#quests";
+    recap.replaceChildren(`Quest complete! ${badges}${routeText(plan)} · ${plan.minutes} min · ${formatCost(plan.cost)}. `, profile);
     finish.disabled = true;
     finish.textContent = "Completed ✓";
   });
   quest.append(finish, recap);
   root.append(quest);
   quest.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/** Start a quest kept on the profile page. Nothing is read: the plan was saved here. */
+function openQuest(plan, choices) {
+  setChoices(choices);
+  lastPlan = { ...plan, choices, options: [plan] };
+  const root = $("#quest-result");
+  root.replaceChildren();
+  root.hidden = false;
+  $("#planner-status").dataset.kind = "success";
+  $("#planner-status").textContent = "Opened from your profile. Check each group’s page for current details.";
+  startQuest(plan, choices);
 }
 
 // ---- Quick chat (no key) ------------------------------------------------------------------
@@ -451,6 +488,8 @@ async function setMode(mode) {
 export const Sidequest = {
   currentChoices,
   setChoices,
+  useDefaults,
+  openQuest,
   build,
   status: () => ({
     choices: currentChoices(),
@@ -463,6 +502,8 @@ export const Sidequest = {
 if (typeof window !== "undefined" && typeof document !== "undefined") {
   window.Sidequest = Sidequest;
   renderProgress();
+  window.addEventListener("storage", renderProgress);
+  window.addEventListener("pageshow", (event) => { if (event.persisted) renderProgress(); });
   renderConsentMemory();
   $("#forget-consent")?.addEventListener("click", () => {
     storage.set("sessionStorage", CONSENT_KEY, null);

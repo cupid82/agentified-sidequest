@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex">
+    <!-- connect-src 'none': this page has no way to send the profile anywhere. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <meta name="description" content="Your Campus Sidequest profile: quests, badges, free time and preferences, kept in this browser.">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>Your profile | Campus Sidequest</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237b2ff7'/%3E%3Cstop offset='.5' stop-color='%23f107a3'/%3E%3Cstop offset='1' stop-color='%23ffb627'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='%230a0a0a'/%3E%3Cpath d='M16 16C11 7 4 8 5 14s6 5 11 2Zm0 0c5-9 12-8 11-2s-6 5-11 2Zm0 0c-4 3-7 9-3 10s3-6 3-10Zm0 0c4 3 7 9 3 10s-3-6-3-10Z' fill='url(%23g)'/%3E%3C/svg%3E">
+    <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/GeistMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="you.css">
+    <script src="look.js"></script>
+    <script src="fx-boot.js"></script>
+    <script defer src="vendor/gsap.min.js"></script>
+    <script defer src="vendor/ScrollTrigger.min.js"></script>
+    <script defer src="vendor/SplitText.min.js"></script>
+    <script defer src="vendor/ScrambleTextPlugin.min.js"></script>
+    <script defer src="fx.js"></script>
+    <script type="module" src="profile.js"></script>
+    <script type="module" src="profile-page.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to your profile</a>
+    <header class="topbar">
+      <div class="nav-row">
+        <div class="nav-left"><div class="profile" id="profile"><button type="button" id="profile-chip" class="profile-chip" aria-expanded="false" aria-controls="profile-card" aria-label="Your profile"></button><div id="profile-card" class="profile-card" hidden></div></div>
+        <a class="wordmark" href="./" aria-label="Campus Sidequest home"><span class="brand-icon" aria-hidden="true">}{</span><span>sidequest<span class="brand-campus"> / campus</span></span></a></div>
+        <nav aria-label="Main navigation"><a href="./#planner">Make a plan</a><a href="./#how-it-works">How it works</a><a href="./#partners">Activity sites</a></nav>
+        <a class="nav-button btn btn-primary btn-sm" href="./#planner">Find my hour <span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="me-name">
+        <div class="hero-card me-card">
+          <canvas class="ascii-field" aria-hidden="true"></canvas>
+          <div class="hero-hud" aria-hidden="true">
+            <span class="hud-tl"><i class="live-dot"></i> PROFILE / THIS BROWSER ONLY</span>
+            <span class="hud-tr" id="hud-joined"></span>
+            <span class="hud-bl" id="hud-moods"></span>
+            <span class="hud-br" id="hud-gap"></span>
+          </div>
+          <div class="hero-content me-content">
+            <div class="me-buddy"><canvas id="buddy"></canvas></div>
+            <div class="me-copy" id="me-view">
+              <p class="hero-badge"><span class="badge-mark" aria-hidden="true">✳</span><span class="badge-text" id="me-level" data-own></span></p>
+              <h1 class="hero-title me-name" id="me-name"></h1>
+              <p class="hero-lede me-tagline" id="me-tagline"></p>
+              <div class="me-meter" id="me-meter"></div>
+              <div class="hero-actions">
+                <a class="btn btn-primary" href="./#planner">Find my hour <span aria-hidden="true">→</span></a>
+                <button type="button" class="btn btn-ghost" id="me-edit">Edit profile</button>
+                <button type="button" class="btn btn-ghost" id="me-share">Share</button>
+              </div>
+            </div>
+            <form class="me-copy me-form" id="me-form" hidden>
+              <h2 id="me-form-title">Edit profile</h2>
+              <label class="me-field"><span>Name</span><input id="me-form-name" type="text" maxlength="24" autocomplete="nickname" placeholder="What should we call you?"></label>
+              <label class="me-field"><span>Tagline</span><input id="me-form-tagline" type="text" maxlength="80" autocomplete="off" placeholder="Always up for a puzzle."></label>
+              <div id="me-form-face" class="yc-face"></div>
+              <div id="me-form-picture"></div>
+              <div class="hero-actions">
+                <button type="submit" class="btn btn-primary">Save profile</button>
+                <button type="button" class="btn btn-ghost" id="me-cancel">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <aside class="me-setup" id="me-setup" aria-label="Finish setting up" hidden>
+        <span class="hello-face" aria-hidden="true">:)</span>
+        <p><strong>Customize your experience.</strong> Six quick picks so every plan starts closer to you. About a minute.</p>
+        <a class="btn btn-primary btn-sm" href="welcome.html">Set it up <span aria-hidden="true">→</span></a>
+      </aside>
+
+      <div class="me-layout">
+        <nav class="me-nav" id="me-nav" aria-label="Profile sections">
+          <a href="#overview"><span aria-hidden="true">01</span>Overview</a>
+          <a href="#free-time"><span aria-hidden="true">02</span>Free time</a>
+          <a href="#quests"><span aria-hidden="true">03</span>Quests</a>
+          <a href="#badges"><span aria-hidden="true">04</span>Badges</a>
+          <a href="#plan"><span aria-hidden="true">05</span>Planner</a>
+          <a href="#look"><span aria-hidden="true">06</span>Look</a>
+          <a href="#privacy"><span aria-hidden="true">07</span>Account and data</a>
+        </nav>
+
+        <div class="me-main">
+          <section class="me-section" id="overview" aria-labelledby="overview-title">
+            <header class="me-head"><p class="kicker">/ overview</p><h2 id="overview-title" class="split-head">Your campus, so far.<br><span class="muted">Counted from quests you finished.</span></h2></header>
+            <dl class="me-tiles" id="me-tiles"></dl>
+            <p class="me-note" id="me-early" hidden></p>
+            <div class="me-pair">
+              <article class="me-box" aria-labelledby="week-title"><h3 id="week-title">This week</h3><div id="me-week"></div></article>
+              <article class="me-box me-next" aria-labelledby="gap-title"><h3 id="gap-title">Your next gap</h3><div id="me-gap"></div></article>
+            </div>
+          </section>
+
+          <section class="me-section" id="free-time" aria-labelledby="free-title">
+            <header class="me-head"><p class="kicker">/ free time</p><h2 id="free-title" class="split-head">When you’re free.<br><span class="muted">The planner opens with the gap you’re in.</span></h2></header>
+            <div class="me-box"><div id="me-gaps"></div><p class="me-note" id="me-gaps-text"></p></div>
+          </section>
+
+          <section class="me-section" id="quests" aria-labelledby="quests-title">
+            <header class="me-head"><p class="kicker">/ quests</p><h2 id="quests-title" class="split-head">Where you’ve been.<br><span class="muted">And what you saved for later.</span></h2></header>
+            <div class="me-tabs" role="tablist" aria-label="Quests">
+              <button type="button" role="tab" id="tab-log" aria-controls="panel-log" aria-selected="true">Finished <b id="count-log">0</b></button>
+              <button type="button" role="tab" id="tab-saved" aria-controls="panel-saved" aria-selected="false" tabindex="-1">Saved <b id="count-saved">0</b></button>
+            </div>
+            <div role="tabpanel" id="panel-log" aria-labelledby="tab-log"></div>
+            <div role="tabpanel" id="panel-saved" aria-labelledby="tab-saved" hidden></div>
+          </section>
+
+          <section class="me-section" id="badges" aria-labelledby="badges-title">
+            <header class="me-head"><p class="kicker">/ badges</p><h2 id="badges-title" class="split-head">Badges.<br><span class="muted">Once earned, yours to keep.</span></h2></header>
+            <ul class="me-badges" id="me-badges"></ul>
+          </section>
+
+          <section class="me-section" id="plan" aria-labelledby="plan-title">
+            <header class="me-head"><p class="kicker">/ planner</p><h2 id="plan-title" class="split-head">How Sidequest plans for you.<br><span class="muted">What the planner opens with.</span></h2></header>
+            <div class="me-box me-stack" id="me-plan"></div>
+          </section>
+
+          <section class="me-section" id="look" aria-labelledby="look-title">
+            <header class="me-head"><p class="kicker">/ look</p><h2 id="look-title" class="split-head">Make it look like you.<br><span class="muted">On every Sidequest page in this browser.</span></h2></header>
+            <div class="me-box me-stack" id="me-look"></div>
+          </section>
+
+          <section class="me-section" id="privacy" aria-labelledby="privacy-title">
+            <header class="me-head"><p class="kicker">/ account and data</p><h2 id="privacy-title" class="split-head">Your account, your data.<br><span class="muted">Yours to take with you, or erase.</span></h2></header>
+            <div class="me-pair">
+              <article class="me-box" aria-labelledby="account-title"><h3 id="account-title">Google account</h3><div id="me-account"></div></article>
+              <article class="me-box" aria-labelledby="leaves-title">
+                <h3 id="leaves-title">What leaves this browser</h3>
+                <ul class="me-leaves">
+                  <li><b>Activity groups</b> get a request for their public list, after you approve. Nothing about you.</li>
+                  <li><b>Google</b> gets a sign-in request, only if you sign in.</li>
+                  <li><b>Your AI provider</b> gets your messages and the planner’s current choices, only if you use the AI agent.</li>
+                  <li><b>This profile</b> goes nowhere. The page’s own security policy stops it from sending anything.</li>
+                </ul>
+              </article>
+            </div>
+            <div class="me-box me-data-box">
+              <h3>Kept in this browser</h3>
+              <ul class="me-data" id="me-data"></ul>
+              <div class="me-data-actions">
+                <button type="button" class="btn btn-ghost btn-sm" id="data-export">Download my profile</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="data-import">Load from a file</button>
+                <input type="file" id="data-file" accept="application/json,.json" hidden>
+                <button type="button" class="me-erase" id="data-erase">Erase everything</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer"><div class="footer-row"><a class="wordmark" href="./"><span class="brand-icon" aria-hidden="true">}{</span><span>sidequest<span class="brand-campus"> / campus</span></span></a><span>Small plans. More campus life.</span><span class="footer-links">An open agentic web demo · <a href="agent-manifest.json">Agent files</a></span></div></footer>
+
+    <dialog id="ask" class="consent-dialog" aria-labelledby="ask-title">
+      <form method="dialog" class="dialog-inner">
+        <p class="kicker" id="ask-kicker"></p><h2 id="ask-title"></h2>
+        <p class="dialog-copy" id="ask-copy"></p>
+        <ul class="me-ask-list" id="ask-list"></ul>
+        <div class="dialog-actions"><button value="cancel" class="cancel-button btn btn-ghost">Cancel</button><button id="ask-yes" value="yes" class="btn btn-primary"></button></div>
+      </form>
+    </dialog>
+  </body>
+</html>

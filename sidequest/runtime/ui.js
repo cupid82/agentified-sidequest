@@ -112,7 +112,39 @@ export function providerForApiKey(apiKey) {
       }
     }
   }
+  // Older OpenAI keys have no "proj" part, but every one contains this marker.
+  if (!match && /^sk-[A-Za-z0-9_-]*T3BlbkFJ/.test(key)) match = API_KEY_PROVIDERS.find((entry) => entry.name === "OpenAI");
   return match;
+}
+
+/**
+ * Ask a provider whether it accepts a key, before the key is saved.
+ *
+ * Only a clear refusal counts: a provider with no key check, a key with limited
+ * permissions or a network problem gives "unknown", and the setup is still saved.
+ *
+ * :param router: The provider's base URL.
+ * :param key: The API key.
+ * :return: "ok", "rejected" or "unknown".
+ */
+export async function checkProviderKey(router, key) {
+  const base = String(router || "").replace(/\/$/, "");
+  let host = "";
+  try { host = new URL(base, globalThis.location?.href).host; } catch { return "unknown"; }
+  const headers = host === "api.anthropic.com"
+    ? { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
+    : { Authorization: `Bearer ${key}` };
+  // OpenRouter's model list is public, so it would accept any key.
+  const url = host === "openrouter.ai" ? `${base}/key` : `${base}/models`;
+  try {
+    const response = await fetch(url, { cache: "no-store", headers, signal: AbortSignal.timeout(8000) });
+    if (response.ok) return "ok";
+    if (response.status === 401) return "rejected";
+    if (response.status === 400 && /api.?key|credential/i.test(await response.text())) return "rejected";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 // The providers shown as buttons in the settings panel.
@@ -1325,7 +1357,7 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
       refreshHint();
     }
     const availableModels = await fetchAvailableModels(router, key);
-    if (!availableModels?.length || availableModels.includes(model)) return true;
+    if (!availableModels?.length || availableModels.some((id) => id.replace(/^models\//, "") === model.replace(/^models\//, ""))) return true;
 
     const shown = availableModels.slice(0, 6);
     const remainder = availableModels.length - shown.length;
@@ -1445,6 +1477,21 @@ export function mountApp(root, { engine, trace, manifest, connect = null }) {
     modelEl.value = model;
     if (!key) {
       setProfileHint("API key is required. Paste your key above to continue.", "warn");
+      root.querySelector(".ns-settings").open = true;
+      keyEl.focus();
+      return;
+    }
+    const applyBtn = root.querySelector("#ns-apply");
+    let keyRouter = routerEl.value.trim() || byokRouter;
+    if (byokRouter && isMockRouter(keyRouter)) keyRouter = byokRouter;
+    applyBtn.disabled = true;
+    setProfileHint("Checking your key…");
+    const verdict = await checkProviderKey(keyRouter, key);
+    applyBtn.disabled = false;
+    if (verdict === "rejected") {
+      let host = keyRouter;
+      try { host = new URL(keyRouter, location.href).host; } catch {}
+      setProfileHint(`${host} rejected this key. Check that you copied all of it and that it belongs to this provider. If it is for another provider, change the Provider URL under Advanced settings.`, "warn");
       root.querySelector(".ns-settings").open = true;
       keyEl.focus();
       return;

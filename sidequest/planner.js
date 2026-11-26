@@ -4,7 +4,8 @@
 //   parseMessage(text, state)  reads one key-free chat message: what the visitor wants
 //                              to do, and their time and budget
 //   searchTerms(request)       the listing words an activity request stands for
-//   findPlans(lists, choices)  ranks plans from the groups' public lists
+//   findPlans(lists, choices, taste)  ranks plans from the groups' public lists; taste is
+//                              the visitor's saved likes and only breaks ties
 //
 // Words are matched whole ("art" does not match "start"), and an unknown or off-topic
 // message never starts a plan: it gets a short reply instead.
@@ -39,6 +40,26 @@ const ACTIVITY_WORDS = {
   snack: ["snack"], food: ["snack"], eat: ["snack"], drink: ["drink"], coffee: ["drink"], tea: ["drink"],
   team: ["team"], teamwork: ["team"],
 };
+
+// What a visitor can say they are into (profile page and first-time setup). `request` is what
+// the planner searches for when they tap it. `titles` are the words in a listing's title that
+// count as a match: title words only, so "Photo challenge cards" is not taken for a card game.
+export const INTERESTS = [
+  { id: "zine", label: "Zines", mood: "make", request: "zine", titles: ["zine"] },
+  { id: "badge", label: "Badges", mood: "make", request: "badge", titles: ["badge"] },
+  { id: "sketch", label: "Sketching", mood: "make", request: "sketch", titles: ["sketch", "doodle", "drawing"] },
+  { id: "collage", label: "Collage", mood: "make", request: "collage", titles: ["collage"] },
+  { id: "postcard", label: "Postcards", mood: "make", request: "postcard", titles: ["postcard"] },
+  { id: "weaving", label: "Weaving", mood: "make", request: "weaving", titles: ["weave", "weaving", "key tag"] },
+  { id: "cards", label: "Card games", mood: "meet", request: "cards", titles: ["card game", "card table", "card-table"] },
+  { id: "puzzle", label: "Puzzles", mood: "meet", request: "puzzle", titles: ["puzzle"] },
+  { id: "trivia", label: "Trivia", mood: "meet", request: "trivia", titles: ["trivia", "quiz"] },
+  { id: "mystery", label: "Mysteries", mood: "meet", request: "mystery", titles: ["mystery"] },
+  { id: "snack", label: "Snacks", mood: "meet", request: "snack", titles: ["snack", "drink"] },
+  { id: "walk", label: "Walks", mood: "move", request: "walk", titles: ["walk", "trail"] },
+  { id: "photo", label: "Photos", mood: "move", request: "photo", titles: ["photo"] },
+];
+export const PLACES = ["any", "inside", "around"];
 
 const MOOD_WORDS = {
   meet: ["meet", "social", "socialize", "people", "friend", "friends", "together", "connect", "someone", "hang", "chat", "company", "new people", "lonely"],
@@ -220,6 +241,31 @@ export function relevanceScore(item, terms) {
   return terms.reduce((total, term) => total + Math.max(0, ...fields.map(([text, weight]) => (hasTerm(String(text || ""), term) ? weight : 0))), 0);
 }
 
+/** The visitor's interests (ids) that a listing's title matches, as INTERESTS entries. */
+export function interestsIn(item, ids = []) {
+  const title = String(item?.title || "");
+  return INTERESTS.filter(({ id, titles }) => ids.includes(id) && titles.some((term) => hasTerm(title, term)));
+}
+
+/** "around" when a listing happens around campus, otherwise "inside". */
+export const placeOf = (item) => (/\b(around|outside|outdoors?|trail|courtyard|quad|park|garden)\b/i.test(String(item?.setting || "")) ? "around" : "inside");
+
+/**
+ * How well one listing suits the visitor's saved taste. It only breaks ties between plans
+ * that fit equally well: it never hides a listing or loosens a limit.
+ *
+ * :param item: A listing.
+ * :param taste: {interests: [ids], place, avoid: [titles marked "not for me"]}, all optional.
+ * :return: 2 for a matching interest, 1 for the preferred place, -4 for a title to avoid.
+ */
+export function tasteScore(item, taste = {}) {
+  let score = 0;
+  if (interestsIn(item, taste.interests).length) score += 2;
+  if (taste.place && taste.place !== "any" && placeOf(item) === taste.place) score += 1;
+  if (taste.avoid?.includes(item?.title)) score -= 4;
+  return score;
+}
+
 function usable(item, budget) {
   return item && typeof item.title === "string" && Number.isFinite(item.duration) && Number.isFinite(item.cost) && item.duration > 0 && item.cost >= 0 && item.cost <= budget;
 }
@@ -231,13 +277,14 @@ function usable(item, budget) {
  * With an activity request, listings are ranked by relevanceScore(); without one, they
  * must suit the chosen mood. The three picks differ: a free one first,
  * then a paid one near half the budget and a fuller one, each preferring activities the
- * earlier picks did not use.
+ * earlier picks did not use. Plans that fit equally well are ordered by tasteScore().
  *
  * :param lists: [{peer, activities}], one per group, in a fixed order.
  * :param choices: {mood, timeMinutes, budget, activityRequest}.
+ * :param taste: The visitor's saved taste; see tasteScore().
  * :return: [{label, stops: [{peer, item}], minutes, cost}].
  */
-export function findPlans(lists, choices) {
+export function findPlans(lists, choices, taste = {}) {
   const terms = searchTerms(choices.activityRequest || "");
   const score = (item) => relevanceScore(item, terms);
   const eligible = lists.map(({ peer, activities }) => ({
@@ -264,6 +311,7 @@ export function findPlans(lists, choices) {
   const key = (stop) => `${stop.peer.id}:${stop.item.id || stop.item.title}`;
   const signature = (plan) => plan.stops.map(key).join("+");
   const relevance = (plan) => (terms.length ? plan.stops.reduce((total, stop) => total + score(stop.item), 0) / plan.stops.length : 0);
+  const liking = (plan) => plan.stops.reduce((total, stop) => total + tasteScore(stop.item, taste), 0) / plan.stops.length;
   const stable = (a, b) => signature(a).localeCompare(signature(b));
 
   const selected = [];
@@ -271,7 +319,7 @@ export function findPlans(lists, choices) {
   const overlap = (plan) => plan.stops.filter((stop) => used.has(key(stop))).length;
   const pick = (list, label, order) => {
     const pool = list.filter((plan) => !selected.some((entry) => signature(entry) === signature(plan)));
-    pool.sort((a, b) => overlap(a) - overlap(b) || relevance(b) - relevance(a) || order(a, b) || stable(a, b));
+    pool.sort((a, b) => overlap(a) - overlap(b) || relevance(b) - relevance(a) || liking(b) - liking(a) || order(a, b) || stable(a, b));
     const plan = pool[0];
     if (!plan) return false;
     selected.push({ ...plan, label: typeof label === "function" ? label(plan) : label });

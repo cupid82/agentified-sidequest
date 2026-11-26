@@ -32,13 +32,13 @@ export const SITES = [
   {
     dir: path.join(ROOT, "publishers", "maker-studio"),
     network: "maker_studio",
-    kit: ["publisher.css"],
+    kit: ["publisher.css", "publisher-fx.js", "Geist-Variable.woff2", "GeistMono-Variable.woff2", "OFL.txt"],
     extra: [],
   },
   {
     dir: path.join(ROOT, "publishers", "campus-games"),
     network: "campus_games",
-    kit: ["publisher.css"],
+    kit: ["publisher.css", "publisher-fx.js", "Geist-Variable.woff2", "GeistMono-Variable.woff2", "OFL.txt"],
     extra: [],
   },
 ];

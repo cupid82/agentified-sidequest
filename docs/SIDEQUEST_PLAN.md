@@ -6,7 +6,7 @@
 
 Campus Sidequest turns a gap between classes into a small, low-cost campus plan. Visitors tell Sidequest what they feel like doing and how much time or money they have, or set the planner directly. Two independent campus sites publish their own activity lists. The hub asks permission before reading those lists, then matches and ranks suitable activities in the browser.
 
-The interface stays plain: **say what you want, approve the read, choose a plan**. It avoids accounts, location tracking, sign-ups, bookings and payments. All current listings are clearly marked as demo examples rather than scheduled events.
+The interface stays plain: **say what you want, approve the read, choose a plan**. It needs no account and avoids location tracking, bookings and payments. All current listings are clearly marked as demo examples rather than scheduled events.
 
 ## User journey
 
@@ -14,6 +14,15 @@ The interface stays plain: **say what you want, approve the read, choose a plan*
 2. Review a dialog naming Makers Studio and Campus Games with their origins, then allow or cancel. "Don't ask again in this tab" is optional and can be undone with "Ask me each time".
 3. If allowed, Sidequest reads each site's public manifest and its read-only `get_activities` action through the site's action bridge, with an empty argument object. Nothing about the visitor is sent.
 4. Sidequest ranks plans locally: up to three, each different, within the time and budget. Every stop links to its group. Choosing a plan opens its route, checkboxes, a wildcard challenge and a completion recap with a badge.
+
+## Profile and first-time setup
+
+Both are optional, and everything in them stays in the visitor's browser (`sidequest/you.js`).
+
+- **First-time setup** (`welcome.html`, "Customize your experience"): name and face, usual vibe, interests, time and money, weekly free time, look. The hub invites first-time visitors once, without blocking the page; a first Google sign-in goes there directly. Answers save as they are given.
+- **Profile page** (`profile.html`): level and numbers from finished quests, this week's goal, the next free gap, a log with notes and how each quest felt, saved plans, badges, planner defaults, look, and the data itself: download, load, reset, erase.
+- **What it changes:** the planner opens with the visitor's defaults, or with the gap they are in; suggestions start with their interests; plans that fit equally well are ordered by taste (`tasteScore()` in `planner.js`). Taste never hides a listing or loosens a limit.
+- **Privacy boundary:** their pages have `connect-src 'none'`, so their scripts cannot send a request; the only outside file they load is a signed-in visitor's Google photo. The activity groups get nothing about the visitor. The AI agent's page actions do not read the profile; its provider sees the planner's current choices, as before.
 
 ## The chat panel
 
@@ -24,7 +33,7 @@ One panel, two modes:
 
 ## Architecture
 
-- `sidequest/`: hub page (`index.html`, `sidequest.js`), planning logic (`planner.js`), agent mount (`site.js`), the agent's page actions (`site-actions.js`), the network source (`campus_sidequest.hocon`) and the consent dialog. A static site.
+- `sidequest/`: hub page (`index.html`, `sidequest.js`, `personal.js`), profile page and setup (`profile.html`, `welcome.html`, `you.js`, `you-controls.js`, `buddy.js`, `look.js`), planning logic (`planner.js`), agent mount (`site.js`), the agent's page actions (`site-actions.js`), the network source (`campus_sidequest.hocon`) and the consent dialog. A static site.
 - `publishers/maker-studio/`: independent creative activity page, `maker_studio` network and read-only bridge.
 - `publishers/campus-games/`: independent play activity page, `campus_games` network and read-only bridge.
 - `scripts/build.mjs`: bundles the three Sidequest sites and validates their networks.
@@ -35,8 +44,8 @@ Activity lists are small fixed demo data, not live campus inventory.
 
 ## Checks
 
-- `node --test tests/sidequest.test.mjs`: 14 unit tests (parser, matching, ranking, limits, the agent's action definitions and files).
-- `node tests/e2e/run-sidequest-e2e.mjs`: 10 headless-Chrome checks on three origins, including the AI agent and site composition with a scripted router.
+- `npm test`: unit tests of the planner (parser, matching, ranking, limits, the agent's action definitions and files) and of the profile (cleaning of stored and imported data, levels, badges, streaks, free time, taste, and the pages' security policy).
+- `npm run e2e`: 14 headless-Chrome checks on three origins, including the AI agent and site composition with a scripted router, the first-time invitation, the setup, the profile page and erasing it.
 
 ## Judging story
 

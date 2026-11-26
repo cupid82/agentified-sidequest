@@ -5,7 +5,12 @@
 Campus Sidequest reads public activity lists from Makers Studio and Campus Games, then
 builds up to three short plans in the visitor's browser. The visitor approves each read;
 their mood, time and budget stay on their device. The listings are demo examples, not
-scheduled events. There are no accounts, bookings or payments.
+scheduled events. No account is needed, and there are no bookings or payments.
+
+First-time visitors can customize their experience in six quick picks (`welcome.html`), and
+everyone has a profile page (`profile.html`): quests, badges, free time, planner defaults,
+look and data. All of it stays in the browser. Signing in with Google is optional and only
+adds a name and picture.
 
 ## Run locally
 
@@ -22,7 +27,8 @@ The optional AI agent runs in the browser with the visitor's own provider key.
 
 ## Project layout
 
-- `sidequest/` — hub page, planner, browser agent and network.
+- `sidequest/` — hub page, planner, browser agent and network, the profile page and the
+  first-time setup (`you.js` holds what a visitor's browser remembers).
 - `publishers/maker-studio/` and `publishers/campus-games/` — independent activity sites.
 - `skills/agentify-website/` — the browser runtime and network builder used by the sites.
 - `scripts/` — build, local serve and three-origin retargeting commands.
